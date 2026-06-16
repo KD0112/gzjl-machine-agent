@@ -1,10 +1,12 @@
 # GitHub + Streamlit Cloud 部署说明
 
-目标网站形态：
+当前线上网站：
 
 ```text
-https://gzjl-machine-agent.streamlit.app
+https://gzjl-machine-agent-7353.streamlit.app
 ```
+
+原计划使用 `https://gzjl-machine-agent.streamlit.app`，实际部署时使用了可用域名 `gzjl-machine-agent-7353`。
 
 ## 重要原则
 

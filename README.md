@@ -145,8 +145,8 @@ python evaluate_cases.py --k 3 --with-llm
 - 客户页面默认隐藏 Top-K、引用来源和工单草稿，只展示连续对话体验。
 - 部署细节见 `DEPLOY_STREAMLIT.md`。
 
-推荐线上地址：
+当前线上地址：
 
 ```text
-https://gzjl-machine-agent.streamlit.app
+https://gzjl-machine-agent-7353.streamlit.app
 ```
