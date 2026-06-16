@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+chroma_db/
+.streamlit/secrets.toml
+reports/
+docs_sample_backup/
+assets/
+*.log
+/贵州劲龙机械.md
