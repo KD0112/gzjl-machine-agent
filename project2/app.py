@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import streamlit as st
 
@@ -18,6 +19,13 @@ EXAMPLE_QUESTIONS = [
 ]
 
 APP_STATE_VERSION = "tool_history_v2"
+DEPLOY_BUILD_LABEL = "project2-cloud-v2026-07-05"
+GIT_COMMIT = os.getenv("GIT_COMMIT", "").strip()[:7]
+DEPLOY_LABEL = (
+    f"{DEPLOY_BUILD_LABEL} | commit {GIT_COMMIT}"
+    if GIT_COMMIT
+    else DEPLOY_BUILD_LABEL
+)
 RUNNERS = {
     "手写 workflow": run_agent,
     "LangGraph": run_graph_agent,
@@ -30,13 +38,19 @@ st.set_page_config(
 )
 
 st.title("挖机配件多工具销售 Agent 调试台")
-st.caption("用于验证意图识别、槽位抽取、缺失信息追问、工具调用和运行日志。")
+st.caption(
+    "用于验证意图识别、槽位抽取、缺失信息追问、工具调用和运行日志。"
+    f" 部署标识：{DEPLOY_LABEL}"
+)
 
 if st.session_state.get("app_state_version") != APP_STATE_VERSION:
     st.session_state["app_state_version"] = APP_STATE_VERSION
     st.session_state.pop("last_result", None)
 
 with st.sidebar:
+    st.caption(f"部署标识：{DEPLOY_LABEL}")
+    st.caption("入口文件：project2/app.py")
+    st.divider()
     st.subheader("执行模式")
     execution_mode = st.radio(
         "选择本轮 Agent 调度方式",
