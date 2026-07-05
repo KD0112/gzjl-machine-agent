@@ -6,6 +6,6 @@ chroma_db/
 .streamlit/secrets.toml
 reports/
 docs_sample_backup/
-assets/
+/assets/
 *.log
 /贵州劲龙机械.md

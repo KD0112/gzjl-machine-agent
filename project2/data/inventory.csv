@@ -1,0 +1,14 @@
+part_id,brand,machine_model,part_name,quality_level,stock_count,warehouse,status,price_min,price_max
+P001,小松,PC200,液压泵,原厂,2,贵阳仓,available,28500,32800
+P002,小松,PC200,液压泵,副厂,5,贵阳仓,available,16800,21800
+P003,小松,PC200,液压泵,经济型,8,广州仓,available,9800,13800
+P004,小松,PC200,喷油嘴,原厂,0,贵阳仓,out_of_stock,1850,2350
+P005,小松,PC200,喷油嘴,副厂,12,贵阳仓,available,680,980
+P006,小松,PC200,斗齿,副厂,30,贵阳仓,available,85,135
+P007,小松,PC200,回油滤芯,原厂,9,贵阳仓,available,320,460
+P008,卡特,320D,液压泵,原厂,1,广州仓,available,33500,38800
+P009,卡特,320D,行走马达,副厂,3,广州仓,available,12800,16800
+P010,三一,SY215,主控阀,原厂,1,长沙仓,available,22600,27600
+P011,三一,SY215,液压泵,副厂,4,长沙仓,available,15600,19800
+P012,日立,ZX200,行走马达,原厂,0,广州仓,out_of_stock,24800,29800
+P013,日立,ZX200,行走马达,副厂,2,广州仓,available,11800,15800
