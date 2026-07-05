@@ -27,4 +27,4 @@
 {"id":"Q027","question":"斗齿库存不足怎么办？","expected_type":"inventory_procurement","should_follow_up":false,"expected_owner":"采购/仓库","retrieval_keywords":["斗齿","库存"]}
 {"id":"Q028","question":"主控阀可以调货还是要订货？","expected_type":"inventory_procurement","should_follow_up":false,"expected_owner":"采购/仓库","retrieval_keywords":["主控阀","订货"]}
 {"id":"Q029","question":"原厂和副厂差在哪里？","expected_type":"general","should_follow_up":false,"expected_owner":"客服一线","retrieval_keywords":["原厂","副厂"]}
-{"id":"Q030","question":"你们能不能给三档方案？","expected_type":"general","should_follow_up":false,"expected_owner":"客服一线","retrieval_keywords":["三档","经济型"]}
+{"id":"Q030","question":"你们能不能给三档方案？","expected_type":"part_quote","should_follow_up":true,"expected_owner":"销售/配件顾问","retrieval_keywords":["三档","经济型"]}

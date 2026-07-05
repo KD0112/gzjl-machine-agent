@@ -59,6 +59,9 @@ TYPE_KEYWORDS = {
         "下单",
         "费用",
         "便宜",
+        "三档",
+        "经济型",
+        "稳定型",
     ),
     "part_match": (
         "配件",
@@ -121,6 +124,7 @@ TYPE_KEYWORDS = {
         "地址",
         "包装",
         "时效",
+        "签收",
     ),
     "inventory_procurement": (
         "库存",
