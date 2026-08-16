@@ -1,5 +1,7 @@
 # 企业智能客服 Agent + 知识库 RAG 系统
 
+[![Machine Agent CI](https://github.com/KD0112/gzjl-machine-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/KD0112/gzjl-machine-agent/actions/workflows/ci.yml)
+
 这是一个面向工程机械配件销售场景的 AI Agent / RAG 项目。
 
 ## 当前状态
