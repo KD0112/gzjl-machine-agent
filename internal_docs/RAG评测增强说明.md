@@ -17,6 +17,8 @@ RAG 可解释性测试，覆盖内部调试台的 5 条演示路径和 9 个知�
 - Top-K 是否命中指定知识库文件。
 - metadata 的 `category` 是否符合预期。
 - metadata 的 `risk_level` 是否符合预期。
+- Chroma 检索距离分数和 `ok/no_docs/low_confidence` 状态。
+- query expansion 是否记录了业务同义词。
 - 缺失字段是否包含关键追问信息。
 - 工单草稿是否包含指定业务关键词。
 
@@ -26,6 +28,20 @@ RAG 可解释性测试，覆盖内部调试台的 5 条演示路径和 9 个知�
 reports/evaluation_summary_rag_observability_cases.md
 ```
 
+如果要说明 Top-K 为什么取 3 或 5，可以运行：
+
+```powershell
+python evaluate_cases.py --cases tests/rag_observability_cases.jsonl --k-list 1,3,5,8
+```
+
+脚本会生成 Top-K 对比报告：
+
+```text
+reports/topk_comparison_rag_observability_cases_时间戳.md
+```
+
 ## 面试讲法
 
 我没有只看大模型回答好不好，而是把 RAG 链路拆成可测试指标：意图分类、检索命中文档、metadata 风险等级、主动追问、工单处理人和工单字段。这样每次扩充知识库或调整分类规则后，都可以用脚本回归，避免系统表面能答、内部链路却失控。
+
+本次又补了检索距离分数、低置信兜底、业务同义词扩展、Top-K 对比和索引 manifest。这样面试官追问“检索不到怎么办、Top-K 怎么选、新知识怎么更新、如何降低幻觉”时，可以直接对应到代码和报告。

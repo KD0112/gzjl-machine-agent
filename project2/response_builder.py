@@ -14,6 +14,14 @@ FIELD_PROMPTS = {
     "order_id": "订单号",
 }
 
+TOOL_LABELS = {
+    "inventory_tool": "库存查询",
+    "quote_tool": "报价确认",
+    "logistics_tool": "物流估算",
+    "ticket_tool": "售后工单",
+    "knowledge_tool": "知识库查询",
+}
+
 
 def _subject(slots: dict[str, Any]) -> str:
     quality_part = "".join(
@@ -77,6 +85,21 @@ def _ticket_sentence(ticket: dict[str, Any]) -> str:
     )
 
 
+def _knowledge_sentence(knowledge: dict[str, Any]) -> str:
+    answer = str(knowledge.get("answer", "")).strip()
+    if not answer:
+        return "暂未从企业知识库取得可用答案，建议转人工进一步确认。"
+
+    source_names = [
+        item.get("source_name")
+        for item in knowledge.get("sources", [])
+        if item.get("source_name")
+    ]
+    unique_sources = list(dict.fromkeys(source_names))
+    source_text = f"\n参考来源：{'、'.join(unique_sources[:3])}" if unique_sources else ""
+    return answer + source_text
+
+
 def _no_tool_guidance(parse_result: dict[str, Any]) -> str:
     intents = set(parse_result["intents"])
     slots = parse_result["slots"]
@@ -104,6 +127,8 @@ def build_customer_reply(
     parse_result: dict[str, Any],
     tool_results: dict[str, Any],
     unsupported_tools: list[str],
+    skipped_tools: list[str] | None = None,
+    tool_errors: dict[str, Any] | None = None,
 ) -> str:
     """Build a customer-facing reply without exposing internal tool/debug wording."""
     if parse_result["missing_fields"]:
@@ -134,13 +159,25 @@ def build_customer_reply(
     if ticket:
         reply_parts.append(_ticket_sentence(ticket))
 
+    knowledge = tool_results.get("knowledge_tool")
+    if knowledge:
+        reply_parts.append(_knowledge_sentence(knowledge))
+
     if "ticket_tool" in unsupported_tools:
         reply_parts.append("售后问题我建议转人工客服继续处理，这样可以核对订单、照片和具体售后政策。")
+
+    if skipped_tools:
+        skipped_labels = "、".join(TOOL_LABELS.get(name, "相关操作") for name in skipped_tools)
+        reply_parts.append(f"本轮{skipped_labels}没有获得人工批准，因此没有继续执行。")
+
+    if tool_errors:
+        error_labels = "、".join(TOOL_LABELS.get(name, "相关查询") for name in tool_errors)
+        reply_parts.append(f"{error_labels}暂时没有处理成功，已保留本轮信息，建议转人工继续确认。")
 
     if not tool_results:
         reply_parts.append(_no_tool_guidance(parse_result))
 
-    if ticket and not any([inventory, quote, logistics]):
+    if ticket and not any([inventory, quote, logistics, knowledge]):
         reply_parts.append("如果您现在比较急，可以让人工客服优先核对这张售后工单。")
     else:
         reply_parts.append("如果您现在比较急，可以让人工客服帮您锁库存、确认最终价格和发货方式。")

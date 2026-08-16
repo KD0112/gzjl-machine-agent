@@ -1,49 +1,54 @@
+import base64
 import html
 import re
+from pathlib import Path
 
 import streamlit as st
 
 import rag_chat
+from rag_history import RagHistoryRepository
+from settings import RAG_STREAM_ENABLED
 
 
 DEFAULT_TOP_K = 3
 SERVICE_PHONE = "18750528881"
 MANUAL_SERVICE_PHONE = "13608517353"
+ASSET_DIR = Path(__file__).resolve().parent / "assets"
 MANUAL_SERVICE_NOTICE = (
     f"如 AI 助手暂未完全解决您的问题，欢迎致电 {MANUAL_SERVICE_PHONE} 联系人工客服，"
-    "我们将进一步为您核实配件型号、库存、报价与售后方案。"
+    "我们将进一步为您核实底盘件型号、尺寸、库存、报价与售后方案。"
 )
 
 PART_IMAGES = [
     {
-        "name": "液压泵 / 主泵",
-        "desc": "适用于挖机液压系统询价与型号核对",
-        "url": "https://www.hydpumpparts.com/photo/pc159016159-jcb_parts_1_stage_333_g5393_hydraulic_gear_pump_for_backhoe_loader.jpg",
+        "name": "履带链条 / 链轨总成",
+        "desc": "核对机型、链节数、链节距、链板孔距与使用工况",
+        "asset": "undercarriage_track_chain.webp",
     },
     {
-        "name": "斗齿 / 齿座",
-        "desc": "支持按机型、尺寸、旧件照片辅助匹配",
-        "url": "https://www.bluediamondattachments.com/uploads/product-spec/_mediumSize/210005_1-1.jpg",
+        "name": "引导轮 / 张紧装置",
+        "desc": "区分引导轮磨损、张紧油缸泄漏、链条拉长与掉链问题",
+        "asset": "undercarriage_front_idler.webp",
     },
     {
-        "name": "滤芯 / 保养件",
-        "desc": "机油滤、柴油滤、液压滤等常用件沟通",
-        "url": "https://iprorwxhllkplp5p-static.micyjz.com/cloud/liBpoKlmljSRmjioqonrip/1.jpg",
+        "name": "履带板 / 链板螺栓",
+        "desc": "确认板宽、孔数、孔距、螺栓直径、牙距与强度等级",
+        "asset": "undercarriage_track_shoes.webp",
     },
 ]
 
 QUICK_QUESTIONS = [
-    "PC200液压泵有没有现货？",
-    "液压泵异响怎么排查？",
-    "买错了能不能退货？",
+    "托轮和支重轮有什么区别？",
+    "链条总成询价需要提供什么？",
+    "引导轮反复掉链怎么排查？",
 ]
 
 
 st.set_page_config(
-    page_title="劲龙机械配件智能助手",
+    page_title="劲龙机械底盘件智能助手",
     page_icon="🛠️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown(
@@ -64,9 +69,7 @@ st.markdown(
     }
 
     .stApp {
-        background:
-            radial-gradient(circle at 10% 0%, rgba(245, 155, 34, 0.08), transparent 32%),
-            linear-gradient(180deg, #fbfcf7 0%, #f5f7ef 46%, #eef3e7 100%);
+        background: #f4f5f1;
         color: var(--ink);
     }
 
@@ -98,10 +101,10 @@ st.markdown(
     .jl-logo {
         width: 52px;
         height: 52px;
-        border-radius: 15px;
+        border-radius: 8px;
         display: grid;
         place-items: center;
-        background: linear-gradient(145deg, var(--orange), #d96f00);
+        background: var(--orange);
         color: #111a17;
         font-size: 28px;
         font-weight: 900;
@@ -158,13 +161,11 @@ st.markdown(
     }
 
     .jl-showcase {
-        border-radius: 10px;
+        border-radius: 8px;
         border: 1px solid rgba(213, 221, 207, 0.85);
-        background:
-            linear-gradient(180deg, rgba(250, 252, 244, 0.98), rgba(224, 232, 214, 0.94)),
-            var(--panel);
+        background: #e8ece5;
         min-height: 322px;
-        padding: 22px 44px 26px;
+        padding: 22px 28px 26px;
         position: relative;
         overflow: hidden;
         box-shadow: var(--shadow);
@@ -172,15 +173,7 @@ st.markdown(
     }
 
     .jl-showcase:after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 54px;
-        height: 28px;
-        background: rgba(188, 201, 178, 0.55);
-        border-top: 1px solid rgba(157, 174, 146, 0.35);
-        border-bottom: 1px solid rgba(157, 174, 146, 0.35);
+        display: none;
     }
 
     .jl-showcase-top {
@@ -234,27 +227,30 @@ st.markdown(
     .jl-products {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 34px;
+        gap: 18px;
         position: relative;
         z-index: 1;
     }
 
     .jl-product {
-        border-radius: 10px;
+        border-radius: 7px;
         background: #ffffff;
         border: 1px solid #bbc7b4;
         padding: 14px 14px 12px;
-        text-align: center;
+        text-align: left;
         box-shadow: 0 14px 26px rgba(31, 48, 38, 0.08);
-        min-height: 200px;
+        min-height: 226px;
     }
 
     .jl-product img {
         width: 100%;
-        height: 132px;
+        height: 150px;
         object-fit: contain;
         display: block;
         margin-bottom: 10px;
+        border: 1px solid #e0e4de;
+        border-radius: 6px;
+        background: #f2f3f1;
     }
 
     .jl-product-name {
@@ -418,6 +414,15 @@ st.markdown(
 )
 
 
+def _asset_data_uri(filename: str) -> str:
+    asset_root = ASSET_DIR.resolve()
+    asset_path = (asset_root / filename).resolve()
+    if asset_path.parent != asset_root or not asset_path.is_file():
+        raise FileNotFoundError(f"页面图片不存在：{filename}")
+    encoded = base64.b64encode(asset_path.read_bytes()).decode("ascii")
+    return f"data:image/webp;base64,{encoded}"
+
+
 def render_header() -> None:
     st.markdown(
         f"""
@@ -425,19 +430,19 @@ def render_header() -> None:
             <div class="jl-brand">
                 <div class="jl-logo">JL</div>
                 <div>
-                    <h1 class="jl-title">劲龙机械配件助手</h1>
-                    <div class="jl-subtitle">挖机配件咨询、型号匹配、故障排查、售后处理和发货沟通</div>
+                    <h1 class="jl-title">挖机底盘件智能助手</h1>
+                    <div class="jl-subtitle">贵州劲龙机械 · 链条、四轮一带、销轴与紧固件咨询</div>
                 </div>
             </div>
             <div class="jl-phone">联系电话：{SERVICE_PHONE}</div>
         </div>
         <div class="jl-chips">
-            <span class="jl-chip">液压泵</span>
-            <span class="jl-chip">主控阀</span>
-            <span class="jl-chip">行走马达</span>
-            <span class="jl-chip">斗齿滤芯</span>
-            <span class="jl-chip">售后质保</span>
-            <span class="jl-chip">物流发货</span>
+            <span class="jl-chip">履带链条</span>
+            <span class="jl-chip">支重轮 / 托链轮</span>
+            <span class="jl-chip">引导轮</span>
+            <span class="jl-chip">驱动齿</span>
+            <span class="jl-chip">履带板</span>
+            <span class="jl-chip">销轴与螺栓</span>
         </div>
         <div class="jl-rule"></div>
         """,
@@ -449,7 +454,7 @@ def render_showcase() -> None:
     product_cards = "".join(
         f"""
         <div class="jl-product">
-            <img src="{html.escape(item['url'])}" alt="{html.escape(item['name'])}">
+            <img src="{_asset_data_uri(item['asset'])}" alt="{html.escape(item['name'])}">
             <div class="jl-product-name">{html.escape(item['name'])}</div>
             <div class="jl-product-desc">{html.escape(item['desc'])}</div>
         </div>
@@ -461,11 +466,11 @@ def render_showcase() -> None:
         <div class="jl-showcase">
             <div class="jl-showcase-top">
                 <div class="jl-bot"></div>
-                <div class="jl-search">输入设备型号、配件名称或故障现象，助手会先判断需要补充的信息</div>
+                <div class="jl-search">输入机型、底盘件名称、尺寸或磨损现象，助手会先核对适配信息</div>
             </div>
             <div class="jl-caption">
-                <span>常用配件：泵阀 / 斗齿 / 滤芯</span>
-                <span>先核型号，再谈报价和发货</span>
+                <span>知识主题：底盘件与销轴紧固件 V1.0</span>
+                <span>先核机型与尺寸，再确认适配</span>
             </div>
             <div class="jl-products">{product_cards}</div>
         </div>
@@ -479,20 +484,20 @@ def render_service_cards() -> None:
         """
         <div class="jl-service-row">
             <div class="jl-service-card">
-                <div class="jl-service-title">型号先确认</div>
-                <div class="jl-service-text">优先核对品牌、机型、铭牌、旧件号和安装位置。</div>
+                <div class="jl-service-title">机型尺寸先确认</div>
+                <div class="jl-service-text">核对品牌、完整机型、链节距、孔距、板宽和安装位置。</div>
             </div>
             <div class="jl-service-card">
-                <div class="jl-service-title">报价更稳妥</div>
-                <div class="jl-service-text">库存、品质档位、是否急用确认后，再进入正式报价。</div>
+                <div class="jl-service-title">磨损需要联动看</div>
+                <div class="jl-service-text">链条、驱动齿、引导轮和支重轮磨损可能相互影响。</div>
             </div>
             <div class="jl-service-card">
-                <div class="jl-service-title">故障可追问</div>
-                <div class="jl-service-text">遇到异响、漏油、动作慢，会先给排查顺序和补充信息。</div>
+                <div class="jl-service-title">螺栓不能凭外观</div>
+                <div class="jl-service-text">链板、支重轮和斗轴螺栓需确认直径、牙距、长度和等级。</div>
             </div>
             <div class="jl-service-card">
-                <div class="jl-service-title">人工可接手</div>
-                <div class="jl-service-text">复杂配件、售后和急件可转人工继续核实处理。</div>
+                <div class="jl-service-title">照片人工可复核</div>
+                <div class="jl-service-text">型号不清、偏磨、掉链和复杂适配问题可转人工继续核实。</div>
             </div>
         </div>
         """,
@@ -501,16 +506,57 @@ def render_service_cards() -> None:
 
 
 def init_chat_state() -> None:
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": (
-                    "您好，我是劲龙机械配件助手。您可以告诉我设备品牌、完整型号、配件名称、"
-                    "旧件照片信息或故障现象，我会先帮您判断下一步需要确认什么。"
-                ),
-            }
-        ]
+    if "current_user_id" not in st.session_state:
+        st.session_state.current_user_id = "local_user"
+    if "current_conversation_id" not in st.session_state:
+        st.session_state.current_conversation_id = None
+
+
+def render_conversation_sidebar(
+    repository: RagHistoryRepository,
+) -> tuple[str, str]:
+    init_chat_state()
+    with st.sidebar:
+        st.subheader("我的会话")
+        user_id = st.text_input(
+            "用户标识",
+            key="current_user_id",
+            help="本地演示使用；正式登录后可替换为认证系统的用户 ID。",
+        ).strip()
+        if not user_id:
+            st.warning("请输入用户标识。")
+            st.stop()
+
+        conversations = repository.list_conversations(user_id)
+        known_ids = {item["conversation_id"] for item in conversations}
+        current_id = st.session_state.current_conversation_id
+        if current_id not in known_ids:
+            if conversations:
+                current_id = conversations[0]["conversation_id"]
+            else:
+                current_id = repository.create_conversation(user_id)["conversation_id"]
+            st.session_state.current_conversation_id = current_id
+            conversations = repository.list_conversations(user_id)
+
+        if st.button("新建会话", use_container_width=True):
+            created = repository.create_conversation(user_id)
+            st.session_state.current_conversation_id = created["conversation_id"]
+            st.rerun()
+
+        option_ids = [item["conversation_id"] for item in conversations]
+        title_by_id = {
+            item["conversation_id"]: item["title"]
+            for item in conversations
+        }
+        selected_id = st.selectbox(
+            "切换会话",
+            option_ids,
+            index=option_ids.index(st.session_state.current_conversation_id),
+            format_func=lambda value: title_by_id.get(value, "新会话"),
+        )
+        st.session_state.current_conversation_id = selected_id
+        st.caption("消息保存在本地 SQLite，刷新或重启页面后仍可恢复。")
+    return user_id, selected_id
 
 
 def render_quick_questions() -> None:
@@ -522,11 +568,50 @@ def render_quick_questions() -> None:
             st.rerun()
 
 
-def render_messages() -> None:
+def _display_customer_answer(answer: str) -> str:
+    return append_manual_service_notice(clean_customer_answer(answer))
+
+
+def render_customer_citations(citations: list[dict[str, object]]) -> None:
+    if not citations:
+        return
+    with st.expander("参考依据"):
+        for citation in citations:
+            location = citation.get("page_or_sheet") or citation.get("section") or ""
+            suffix = f"（{location}）" if location else ""
+            st.markdown(f"- {citation.get('document_name', 'unknown')}{suffix}")
+
+
+def render_messages(
+    repository: RagHistoryRepository,
+    user_id: str,
+    conversation_id: str,
+) -> None:
     st.markdown('<div class="jl-section-title">智能对话</div>', unsafe_allow_html=True)
-    for message in st.session_state.messages:
+    messages = repository.list_messages(user_id, conversation_id)
+    if not messages:
+        with st.chat_message("assistant"):
+            st.markdown(
+                "您好，我是劲龙机械底盘件助手。您可以告诉我设备品牌、完整型号、"
+                "链条或四轮一带名称、旧件尺寸和磨损现象，我会先帮您判断还需确认什么。"
+            )
+        return
+
+    for message in messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            content = message["content"]
+            if message["role"] == "assistant":
+                content = _display_customer_answer(content)
+            st.markdown(content)
+            if message["role"] == "assistant":
+                if message.get("cache_hit"):
+                    st.caption("cache_hit：是")
+                citations = repository.get_message_citations(
+                    user_id,
+                    conversation_id,
+                    message["message_id"],
+                )
+                render_customer_citations(citations)
 
 
 def clean_customer_answer(answer: str) -> str:
@@ -569,17 +654,32 @@ def append_manual_service_notice(answer: str) -> str:
     return f"{answer}\n\n{MANUAL_SERVICE_NOTICE}"
 
 
-def ask_assistant(question: str) -> str:
-    result = rag_chat.answer_with_metadata(question, k=DEFAULT_TOP_K)
-    answer = clean_customer_answer(result["answer"].strip())
-    classification = result.get("classification", {})
-    follow_up_questions = classification.get("follow_up_questions", [])
+def ask_assistant(
+    question: str,
+    *,
+    user_id: str,
+    conversation_id: str,
+) -> dict[str, object]:
+    return rag_chat.answer_with_metadata(
+        question,
+        k=DEFAULT_TOP_K,
+        user_id=user_id,
+        conversation_id=conversation_id,
+    )
 
-    if follow_up_questions:
-        escaped_questions = "\n".join(f"- {html.escape(item)}" for item in follow_up_questions)
-        answer = f"{answer}\n\n为了确认更准确，建议补充：\n{escaped_questions}"
 
-    return append_manual_service_notice(answer)
+def stream_assistant(
+    question: str,
+    *,
+    user_id: str,
+    conversation_id: str,
+):
+    return rag_chat.stream_answer_with_metadata(
+        question,
+        k=DEFAULT_TOP_K,
+        user_id=user_id,
+        conversation_id=conversation_id,
+    )
 
 
 def render_footer() -> None:
@@ -594,34 +694,68 @@ def render_footer() -> None:
 
 
 def main() -> None:
+    repository = RagHistoryRepository()
+    user_id, conversation_id = render_conversation_sidebar(repository)
     render_header()
     render_showcase()
     render_quick_questions()
     render_service_cards()
-    init_chat_state()
-    render_messages()
+    render_messages(repository, user_id, conversation_id)
 
     pending_question = st.session_state.pop("pending_question", None)
-    chat_question = st.chat_input("请输入您的配件或售后问题，例如：小松PC200液压泵多少钱？")
+    chat_question = st.chat_input("请输入底盘件问题，例如：托轮和支重轮有什么区别？")
     question = pending_question or chat_question
 
-    if question:
-        st.session_state.messages.append({"role": "user", "content": question})
+    if question and not st.session_state.get("processing_request"):
+        st.session_state.processing_request = True
         with st.chat_message("user"):
             st.markdown(question)
 
         with st.chat_message("assistant"):
-            with st.spinner("正在为您查询配件资料..."):
+            with st.spinner("正在为您查询底盘件资料..."):
+                placeholder = st.empty()
                 try:
-                    answer = ask_assistant(question)
+                    final_result = None
+                    if RAG_STREAM_ENABLED:
+                        accumulated = ""
+                        for event in stream_assistant(
+                            question,
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                        ):
+                            if event["type"] == "delta":
+                                accumulated += event["text"]
+                                placeholder.markdown(
+                                    f"{clean_customer_answer(accumulated)}▌"
+                                )
+                            elif event["type"] == "final":
+                                final_result = event["result"]
+                            elif event["type"] == "error":
+                                placeholder.error(event["message"])
+                    else:
+                        final_result = ask_assistant(
+                            question,
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                        )
+
+                    if final_result:
+                        answer = _display_customer_answer(
+                            str(final_result["answer"])
+                        )
+                        placeholder.markdown(answer)
+                        if final_result.get("cache_hit"):
+                            st.caption("cache_hit：是")
+                        render_customer_citations(
+                            list(final_result.get("citations") or [])
+                        )
                 except Exception:
-                    answer = (
+                    placeholder.error(
                         "抱歉，当前查询暂时没有成功。您可以稍后再试，"
                         f"也可以直接拨打 {MANUAL_SERVICE_PHONE} 联系人工客服。"
                     )
-                st.markdown(answer)
-
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+                finally:
+                    st.session_state.processing_request = False
         st.rerun()
 
     render_footer()

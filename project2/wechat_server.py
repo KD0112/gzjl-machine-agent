@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from agent_graph import run_graph_agent
+from agent_graph import run_graph_agent, start_graph_agent
 from agent_workflow import run_agent
 from tool_call_logger import append_agent_run
 
@@ -68,9 +68,30 @@ def build_text_reply(to_user: str, from_user: str, content: str) -> bytes:
     return xml.encode("utf-8")
 
 
-def build_agent_reply(question: str, mode: str) -> tuple[str, dict[str, Any]]:
-    runner = RUNNERS.get(mode, run_graph_agent)
-    result = runner(question)
+def build_agent_reply(
+    question: str,
+    mode: str,
+    *,
+    customer_id: str = "",
+    message_id: str = "",
+) -> tuple[str, dict[str, Any]]:
+    if mode == "graph":
+        conversation_key = customer_id or message_id
+        thread_id = f"wechat-{conversation_key}" if conversation_key else None
+        result = start_graph_agent(
+            question,
+            thread_id=thread_id,
+            request_id=(f"wechat-message-{message_id}" if message_id else None),
+            approval_mode="auto",
+            handoff_mode="manual",
+            parser_mode="hybrid",
+            knowledge_mode=True,
+            channel="wechat",
+            customer_id=customer_id,
+            session_id=thread_id or "",
+        )
+    else:
+        result = run_agent(question)
     append_agent_run(
         result=result,
         execution_mode=f"wechat_{mode}",
@@ -147,7 +168,12 @@ class WeChatAgentHandler(BaseHTTPRequestHandler):
                 if not question:
                     reply = "请发送需要咨询的挖机配件问题，例如：小松PC200原厂液压泵要1件，有没有现货？"
                 else:
-                    reply, _ = build_agent_reply(question, self.agent_mode)
+                    reply, _ = build_agent_reply(
+                        question,
+                        self.agent_mode,
+                        customer_id=from_user,
+                        message_id=message.get("MsgId", ""),
+                    )
 
             self._send_xml(200, build_text_reply(from_user, to_user, reply))
         except Exception as exc:  # noqa: BLE001 - webhook must not leak stack traces to users.

@@ -2,20 +2,23 @@ from __future__ import annotations
 
 from typing import Any
 
+from langchain_tools import get_langchain_tool_map
 from schemas import (
     InventoryToolArgs,
+    KnowledgeToolArgs,
     LogisticsToolArgs,
     QuoteToolArgs,
     TicketToolArgs,
     dump_args,
 )
-from tools.inventory_tool import query_inventory
-from tools.logistics_tool import estimate_logistics
-from tools.quote_tool import generate_quote
-from tools.ticket_tool import create_after_sales_ticket
 
 
-SUPPORTED_TOOLS = {"inventory_tool", "quote_tool", "logistics_tool", "ticket_tool"}
+TOOL_REGISTRY = get_langchain_tool_map()
+SUPPORTED_TOOLS = set(TOOL_REGISTRY)
+TOOL_ARG_MODELS = {
+    tool_name: tool.args_schema
+    for tool_name, tool in TOOL_REGISTRY.items()
+}
 
 
 def build_tool_args(tool_name: str, parse_result: dict[str, Any]) -> dict[str, Any]:
@@ -59,19 +62,42 @@ def build_tool_args(tool_name: str, parse_result: dict[str, Any]) -> dict[str, A
             )
         )
 
+    if tool_name == "knowledge_tool":
+        return dump_args(
+            KnowledgeToolArgs(
+                question=parse_result["raw_question"],
+                top_k=5,
+            )
+        )
+
     raise ValueError(f"Unsupported tool: {tool_name}")
 
 
 def call_tool(tool_name: str, parse_result: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     args = build_tool_args(tool_name, parse_result)
+    return args, execute_tool_with_args(tool_name, args)
 
-    if tool_name == "inventory_tool":
-        return args, query_inventory(**args)
-    if tool_name == "quote_tool":
-        return args, generate_quote(**args)
-    if tool_name == "logistics_tool":
-        return args, estimate_logistics(**args)
-    if tool_name == "ticket_tool":
-        return args, create_after_sales_ticket(**args)
 
-    raise ValueError(f"Unsupported tool: {tool_name}")
+def validate_tool_args(tool_name: str, raw_args: dict[str, Any]) -> dict[str, Any]:
+    model_class = TOOL_ARG_MODELS.get(tool_name)
+    if model_class is None:
+        raise ValueError(f"Unsupported tool: {tool_name}")
+    return dump_args(model_class.model_validate(raw_args))
+
+
+def execute_tool_with_args(tool_name: str, raw_args: dict[str, Any]) -> dict[str, Any]:
+    tool = TOOL_REGISTRY.get(tool_name)
+    if tool is None:
+        raise ValueError(f"Unsupported tool: {tool_name}")
+    args = validate_tool_args(tool_name, raw_args)
+    result = tool.invoke(
+        args,
+        config={
+            "run_name": f"business_tool:{tool_name}",
+            "tags": ["project2", "business_tool"],
+            "metadata": {"tool_name": tool_name},
+        },
+    )
+    if not isinstance(result, dict):
+        raise TypeError(f"Tool {tool_name} must return a dictionary")
+    return result

@@ -7,6 +7,16 @@ from typing import Any
 import streamlit as st
 
 import rag_chat
+from build_index import build_index
+from document_service import DocumentService, DocumentValidationError
+from settings import (
+    RAG_ALLOWED_EXTENSIONS,
+    RAG_BATCH_MAX_BYTES,
+    RAG_DOCUMENT_MAX_BYTES,
+    RAG_IMAGE_MAX_BYTES,
+    RAG_PROMPT_VERSION,
+    RAG_SEMANTIC_CACHE_ENABLED,
+)
 
 
 DEMO_CASES: list[dict[str, Any]] = [
@@ -88,6 +98,20 @@ METADATA_KEYS = [
     "version",
     "updated_date",
     "source",
+    "document_id",
+    "version_id",
+    "version_number",
+    "original_name",
+    "page",
+    "sheet",
+    "section",
+    "chunk_id",
+    "chunk_index",
+    "chunk_size",
+    "chunk_overlap",
+    "retrieval_rank",
+    "retrieval_distance",
+    "retrieval_aliases",
 ]
 
 
@@ -107,6 +131,8 @@ def _doc_rows(docs: list[Any]) -> list[dict[str, Any]]:
                 "title": metadata.get("title", ""),
                 "category": metadata.get("category", ""),
                 "risk_level": metadata.get("risk_level", ""),
+                "distance": metadata.get("retrieval_distance", ""),
+                "aliases": metadata.get("retrieval_aliases", ""),
                 "preview": doc.page_content[:120].replace("\n", " "),
             }
         )
@@ -128,33 +154,81 @@ def _demo_case_for(question: str) -> dict[str, Any] | None:
     return None
 
 
-def run_debug(question: str, k: int, with_llm: bool) -> dict[str, Any]:
+def run_debug(
+    question: str,
+    k: int,
+    with_llm: bool,
+    use_stream: bool = False,
+) -> dict[str, Any]:
     classification = rag_chat.classify_question(question)
-    docs = rag_chat.retrieve(question, k=k)
+    retrieval = rag_chat.retrieve_with_metadata(question, k=k)
+    docs = retrieval["docs"]
     ticket_draft = rag_chat.generate_ticket_draft(question, classification, docs)
-    context = _context_text(docs)
-    prompt = rag_chat.build_prompt(question, context, classification)
+    context = _context_text(docs if retrieval["status"] == "ok" else [])
+    prompt = rag_chat.build_prompt(question, context, classification, retrieval)
 
     answer = ""
     answer_error = ""
+    answer_source = ""
+    citations = rag_chat.build_citations(docs, retrieval["status"])
+    standalone_query = question
+    cache_info = {
+        "enabled": RAG_SEMANTIC_CACHE_ENABLED,
+        "eligible": False,
+        "hit": False,
+        "rejection_reason": "answer_not_executed",
+        "knowledge_base_fingerprint": rag_chat.knowledge_base_fingerprint(),
+        "prompt_version": RAG_PROMPT_VERSION,
+        "entry_created_at": "",
+        "expires_at": "",
+    }
+    is_streaming = False
     if with_llm:
         try:
-            result = rag_chat.answer_with_metadata(question, k=k)
+            if use_stream:
+                result = None
+                streamed_text = ""
+                for event in rag_chat.stream_answer_with_metadata(question, k=k):
+                    if event["type"] == "delta":
+                        streamed_text += event["text"]
+                    elif event["type"] == "final":
+                        result = event["result"]
+                    elif event["type"] == "error":
+                        answer_error = event["message"]
+                if result is None and not answer_error:
+                    answer_error = "流式接口没有返回最终结果。"
+            else:
+                result = rag_chat.answer_with_metadata(question, k=k)
+            if result is None:
+                raise RuntimeError(answer_error or "回答生成失败。")
             answer = result["answer"]
+            answer_source = result.get("answer_source", "")
+            citations = result.get("citations", [])
+            standalone_query = result.get("standalone_query", question)
+            cache_info = result.get("cache", cache_info)
+            is_streaming = bool(result.get("is_streaming"))
         except Exception as exc:
-            answer_error = str(exc)
+            answer_error = answer_error or str(exc)
 
     return {
         "question": question,
         "top_k": k,
+        "llm_requested": with_llm,
+        "stream_requested": use_stream,
+        "is_streaming": is_streaming,
         "classification": classification,
+        "retrieval": retrieval,
         "docs": docs,
         "doc_rows": _doc_rows(docs),
         "ticket_draft": ticket_draft,
         "context": context,
         "prompt": prompt,
         "answer": answer,
+        "answer_source": answer_source,
         "answer_error": answer_error,
+        "citations": citations,
+        "standalone_query": standalone_query,
+        "cache": cache_info,
     }
 
 
@@ -203,6 +277,165 @@ def render_demo_case(case: dict[str, Any] | None, result: dict[str, Any]) -> Non
     )
 
 
+def _format_bytes(size_bytes: int) -> str:
+    size = float(size_bytes or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
+
+
+def render_document_manager() -> None:
+    service = DocumentService()
+    documents = service.list_documents(include_inactive=True)
+    active_documents = [
+        item
+        for item in documents
+        if item.get("is_active") and item.get("parse_status") == "parsed"
+    ]
+    indexed_documents = [
+        item for item in active_documents if item.get("index_status") == "indexed"
+    ]
+
+    st.divider()
+    st.header("知识库文件管理")
+    st.caption(
+        "上传文件会先校验、解析和去重，点击“增量建库”后才会写入向量库。"
+    )
+    if indexed_documents:
+        st.success(
+            f"已持久化加载 {len(indexed_documents)} 份有效知识文档。"
+            "重新打开网页无需再次上传；文件选择框为空是正常现象。"
+        )
+    elif active_documents:
+        st.warning(
+            f"已有 {len(active_documents)} 份文档完成解析，但尚未全部进入向量库。"
+        )
+
+    limits = (
+        f"格式：{', '.join(RAG_ALLOWED_EXTENSIONS)}；"
+        f"普通文档上限：{_format_bytes(RAG_DOCUMENT_MAX_BYTES)}；"
+        f"图片上限：{_format_bytes(RAG_IMAGE_MAX_BYTES)}；"
+        f"单批总上限：{_format_bytes(RAG_BATCH_MAX_BYTES)}"
+    )
+    st.info(limits)
+
+    uploaded_by = st.text_input(
+        "上传用户",
+        value="local_user",
+        key="rag_upload_user",
+    )
+    uploaded_files = st.file_uploader(
+        "选择知识文档",
+        type=[extension.lstrip(".") for extension in RAG_ALLOWED_EXTENSIONS],
+        accept_multiple_files=True,
+        key="rag_document_uploader",
+    )
+
+    if st.button("上传并解析", disabled=not uploaded_files):
+        payloads = [
+            (item.name, item.getvalue(), item.type or None)
+            for item in uploaded_files
+        ]
+        if sum(len(data) for _, data, _ in payloads) > RAG_BATCH_MAX_BYTES:
+            st.session_state["rag_upload_results"] = [
+                {
+                    "文件": "本批文件",
+                    "状态": "rejected",
+                    "说明": "单次批量上传总大小超过限制。",
+                }
+            ]
+        else:
+            results: list[dict[str, Any]] = []
+            for filename, data, mime_type in payloads:
+                try:
+                    outcome = service.upload_file(
+                        filename,
+                        data,
+                        mime_type=mime_type,
+                        uploaded_by=uploaded_by,
+                    )
+                    results.append(
+                        {
+                            "文件": filename,
+                            "状态": outcome.status,
+                            "文档ID": outcome.document_id,
+                            "版本": outcome.version_number,
+                            "解析状态": outcome.parse_status,
+                            "索引状态": outcome.index_status,
+                            "说明": outcome.message,
+                        }
+                    )
+                except DocumentValidationError as exc:
+                    results.append(
+                        {
+                            "文件": filename,
+                            "状态": "rejected",
+                            "说明": str(exc),
+                        }
+                    )
+            st.session_state["rag_upload_results"] = results
+
+    recent_results = st.session_state.get("rag_upload_results", [])
+    if recent_results:
+        st.subheader("本次处理结果")
+        st.dataframe(recent_results, width="stretch", hide_index=True)
+
+    left, right = st.columns([1.4, 1])
+    with left:
+        if st.button("触发增量建库", type="primary"):
+            try:
+                with st.spinner("正在更新向量库..."):
+                    build_index(incremental=True, document_service=service)
+                rag_chat.load_vector_db.cache_clear()
+                rag_chat.get_retriever.cache_clear()
+                st.success("增量建库完成，RAG 缓存已刷新。")
+            except Exception as exc:
+                st.error(f"增量建库失败：{exc}")
+
+    with right:
+        if active_documents:
+            options = {
+                f"{item['logical_name']}（v{item['current_version']}）": item[
+                    "document_id"
+                ]
+                for item in active_documents
+            }
+            selected = st.selectbox(
+                "选择要停用的文档",
+                options=list(options),
+                key="rag_deactivate_document",
+            )
+            if st.button("停用文档"):
+                if service.deactivate_document(options[selected]):
+                    st.success("文档已停用。再次执行增量建库后会删除相关旧 Chunk。")
+                    st.rerun()
+
+    st.subheader("文档与版本记录")
+    versions = service.list_versions()
+    rows = [
+        {
+            "文档": item["logical_name"],
+            "版本": item["version_number"],
+            "原始文件名": item["original_name"],
+            "上传用户": item["uploaded_by"],
+            "上传时间": item["uploaded_at"],
+            "文件大小": _format_bytes(item["size_bytes"]),
+            "解析状态": item["parse_status"],
+            "索引状态": item["index_status"],
+            "解析错误": item["parse_error"] or "",
+            "当前有效": bool(item["is_active"] and item["document_active"]),
+            "Chunk数": item["chunk_count"],
+        }
+        for item in versions
+    ]
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
+    else:
+        st.info("目前还没有上传文档。")
+
+
 def main() -> None:
     st.set_page_config(page_title="内部 RAG 调试台", layout="wide")
 
@@ -213,6 +446,13 @@ def main() -> None:
         st.subheader("调试参数")
         k = st.slider("Top-K", min_value=1, max_value=8, value=3)
         with_llm = st.checkbox("调用 DeepSeek 生成回答", value=False)
+        use_stream = st.checkbox("使用真实流式接口", value=True)
+        if st.button("清空全部 RAG 答案缓存", use_container_width=True):
+            try:
+                removed = rag_chat.clear_semantic_cache()
+                st.success(f"已清空 {removed} 条缓存。")
+            except Exception:
+                st.error("缓存清理失败，请检查本地缓存目录。")
         st.divider()
         st.subheader("演示问题")
         selected_question = st.selectbox("选择问题", EXAMPLE_QUESTIONS)
@@ -225,22 +465,70 @@ def main() -> None:
     )
     submitted = st.button("运行 RAG 调试", type="primary")
 
-    should_run = submitted or "rag_debug_result" not in st.session_state
+    previous_result = st.session_state.get("rag_debug_result", {})
+    should_run = submitted or not previous_result or "cache" not in previous_result
     if should_run:
-        st.session_state["rag_debug_result"] = run_debug(question, k, with_llm)
+        spinner_text = (
+            "正在检索知识并调用 DeepSeek，生成回答可能需要几十秒..."
+            if with_llm
+            else "正在运行 RAG 检索..."
+        )
+        with st.spinner(spinner_text):
+            st.session_state["rag_debug_result"] = run_debug(
+                question,
+                k,
+                with_llm,
+                use_stream,
+            )
 
     result = st.session_state["rag_debug_result"]
     classification = result["classification"]
 
-    cols = st.columns(5)
+    cols = st.columns(6)
     cols[0].metric("问题类型", classification["label"])
     cols[1].metric("类型代码", classification["type"])
     cols[2].metric("是否追问", "是" if classification["needs_follow_up"] else "否")
     cols[3].metric("Top-K", result["top_k"])
     cols[4].metric("命中片段", len(result["docs"]))
+    cols[5].metric("检索状态", result["retrieval"]["status"])
+
+    if result["retrieval"].get("status") != "ok":
+        st.error(result["retrieval"].get("reason"))
+    else:
+        st.caption(result["retrieval"].get("reason"))
 
     if classification["follow_up_questions"]:
         st.warning("\n".join(f"- {item}" for item in classification["follow_up_questions"]))
+
+    if result["answer"]:
+        st.subheader("本次生成回答")
+        st.markdown(result["answer"])
+        st.caption(f"回答来源：{result.get('answer_source') or 'llm'}")
+    elif result["answer_error"]:
+        st.error(f"DeepSeek 回答生成失败：{result['answer_error']}")
+    elif result.get("llm_requested"):
+        st.warning("本次已请求 DeepSeek，但没有得到可显示的回答。")
+
+    cache_info = result["cache"]
+    cache_cols = st.columns(5)
+    cache_cols[0].metric(
+        "是否流式",
+        "是" if result.get("is_streaming") else "否",
+    )
+    cache_cols[1].metric(
+        "语义缓存命中",
+        "是" if cache_info.get("hit") else "否",
+    )
+    fingerprint = str(cache_info.get("knowledge_base_fingerprint") or "")
+    cache_cols[2].metric("知识库 fingerprint", fingerprint[:12] or "无")
+    cache_cols[3].metric(
+        "缓存创建时间",
+        cache_info.get("entry_created_at") or "无",
+    )
+    cache_cols[4].metric(
+        "缓存拒绝原因",
+        cache_info.get("rejection_reason") or "无",
+    )
 
     left, right = st.columns([1.05, 1])
     with left:
@@ -251,7 +539,9 @@ def main() -> None:
         st.subheader("分类结果")
         st.json(classification)
 
-    tabs = st.tabs(["演示讲法", "检索片段", "工单草稿", "回答 / Prompt", "完整 JSON"])
+    tabs = st.tabs(
+        ["演示讲法", "检索片段", "结构化引用", "工单草稿", "回答 / Prompt", "完整 JSON"]
+    )
 
     with tabs[0]:
         render_demo_case(_demo_case_for(result["question"]), result)
@@ -261,9 +551,15 @@ def main() -> None:
             render_doc_card(index, doc)
 
     with tabs[2]:
-        st.json(result["ticket_draft"])
+        if result["citations"]:
+            st.dataframe(result["citations"], width="stretch", hide_index=True)
+        else:
+            st.info("本次检索证据不足，没有生成引用。")
 
     with tabs[3]:
+        st.json(result["ticket_draft"])
+
+    with tabs[4]:
         if result["answer"]:
             st.subheader("DeepSeek 回答")
             st.markdown(result["answer"])
@@ -275,17 +571,30 @@ def main() -> None:
         st.subheader("构造后的 Prompt")
         st.code(result["prompt"], language="text")
 
-    with tabs[4]:
+    with tabs[5]:
         serializable = {
             "question": result["question"],
             "top_k": result["top_k"],
             "classification": result["classification"],
+            "retrieval": {
+                key: value
+                for key, value in result["retrieval"].items()
+                if key != "docs"
+            },
             "doc_rows": result["doc_rows"],
             "ticket_draft": result["ticket_draft"],
             "answer": result["answer"],
+            "answer_source": result["answer_source"],
             "answer_error": result["answer_error"],
+            "standalone_query": result["standalone_query"],
+            "citations": result["citations"],
+            "stream_requested": result["stream_requested"],
+            "is_streaming": result["is_streaming"],
+            "cache": result["cache"],
         }
         st.code(json.dumps(serializable, ensure_ascii=False, indent=2), language="json")
+
+    render_document_manager()
 
 
 if __name__ == "__main__":

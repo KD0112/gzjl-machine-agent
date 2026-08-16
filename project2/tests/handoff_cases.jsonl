@@ -1,0 +1,9 @@
+{"id":"handoff_001","question":"我要找人工客服确认一下","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"explicit_human_request","expected_called_tools":[]}
+{"id":"handoff_002","question":"小松PC200原厂液压泵要1件，有没有现货，多少钱？","clarification_count":0,"expected_status":"completed","expected_handoff":false,"expected_reason_code":"","expected_called_tools":["inventory_tool","quote_tool"]}
+{"id":"handoff_003","question":"订单号 A20260616001，买错了能不能退货？","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"after_sales_review","expected_called_tools":["ticket_tool"]}
+{"id":"handoff_004","question":"PC200液压泵能不能适配？","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"expert_review","expected_called_tools":[]}
+{"id":"handoff_005","question":"卡特320D液压泵漏油怎么排查？","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"expert_review","expected_called_tools":[]}
+{"id":"handoff_006","question":"PC200液压泵多少钱？","clarification_count":2,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"repeated_missing_information","expected_called_tools":[]}
+{"id":"handoff_007","question":"这个问题你能处理吗","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"low_parse_confidence","expected_called_tools":[]}
+{"id":"handoff_008","question":"PC200液压泵多少钱？","clarification_count":0,"expected_status":"need_more_info","expected_handoff":false,"expected_reason_code":"","expected_called_tools":[]}
+{"id":"handoff_009","question":"卡特320D原厂主控阀要1件，有没有现货？","clarification_count":0,"expected_status":"waiting_human","expected_handoff":true,"expected_reason_code":"no_reliable_result","expected_called_tools":["inventory_tool"]}

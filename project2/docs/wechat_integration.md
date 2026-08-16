@@ -15,8 +15,10 @@ project2/wechat_server.py
 - 把用户文本交给项目二 Agent。
 - 把 Agent 回复包装成微信被动回复文本 XML。
 - 把本轮运行写入 `logs/agent_runs.csv`，方便后续回放。
+- Graph 模式会启用人工接管；需要真人处理时先返回服务单编号。
+- 人工客服回复后写入 SQLite outbox，等待真实客服消息适配器异步发送。
 
-第一版只支持文本消息。图片、语音、菜单事件、客服消息接口可以后续再做。
+第一版只支持文本被动回复。图片、语音、菜单事件和真实客服消息发送接口可以后续再做。
 
 ## 本地启动
 
@@ -66,6 +68,29 @@ Token: project2-agent-token
 - 真正接入时必须有公网 HTTPS 地址。
 - 临时测试可以用 Cloudflare Tunnel 或 ngrok 把本地 `8510` 暴露出去。
 - 正式展示建议部署到云服务器、Render、Railway 等能提供公网 HTTP 服务的平台。
+
+## 人工回复的异步边界
+
+微信 webhook 不能为了等待人工客服而长时间保持 HTTP 请求。当前流程是：
+
+```text
+客户消息 -> Agent 判断转人工 -> 被动回复服务单编号
+         -> 人工客服工作台回复 -> outbox_messages(pending)
+         -> 真实微信客服消息适配器发送 -> delivered
+```
+
+项目目前已经实现：
+
+- 服务单携带微信 `FromUserName` 作为 `customer_id`。
+- 人工回复与原 LangGraph `thread_id` 关联。
+- outbox 使用稳定去重键，重复恢复不会插入多条相同消息。
+- 调试台能查看待发送消息。
+
+项目目前没有伪造：
+
+- 未配置微信公众号/企业微信客服消息 API 凭证。
+- 未把 `pending` 自动标记成 `delivered`。
+- 未实现 access token 刷新、渠道限流、发送重试和回执处理。
 
 更完整的真实接入 checklist 见：
 

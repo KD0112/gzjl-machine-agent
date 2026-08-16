@@ -25,6 +25,7 @@ FORBIDDEN_CUSTOMER_WORDS = [
     "quote_tool",
     "logistics_tool",
     "ticket_tool",
+    "knowledge_tool",
     "unsupported_tools",
     "模拟库存",
     "quote_status",

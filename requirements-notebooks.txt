@@ -1,0 +1,4 @@
+# Notebook authoring and deterministic execution; not required by Streamlit Cloud.
+nbformat>=5.10,<6
+nbclient>=0.10,<1
+ipykernel>=6.29,<7

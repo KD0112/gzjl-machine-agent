@@ -1,0 +1,7 @@
+# Runtime/test dependencies used by day1/project2.
+# Keep this file separate from project2 so the two demonstrations can be locked independently.
+langgraph==1.2.11
+langgraph-checkpoint-sqlite==3.1.1
+langchain-core==1.5.5
+Pillow==12.3.0
+pytest>=8.3,<10

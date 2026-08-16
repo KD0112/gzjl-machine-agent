@@ -15,12 +15,35 @@ FIELDNAMES = [
     "timestamp",
     "execution_mode",
     "status",
+    "request_id",
+    "thread_id",
+    "customer_id",
+    "approval_mode",
     "question",
     "intents",
     "slots",
+    "parse_source",
+    "parse_confidence",
+    "model_runtime",
+    "evidence_ids",
+    "vision_status",
+    "vision_results",
+    "vision_model_runtime",
+    "image_confirmation_decisions",
+    "confirmed_visual_slots",
     "missing_fields",
     "called_tools",
+    "skipped_tools",
     "unsupported_tools",
+    "approval_decisions",
+    "tool_errors",
+    "tool_execution_keys",
+    "handoff_id",
+    "handoff_status",
+    "handoff_priority",
+    "handoff_reason",
+    "assigned_agent",
+    "human_reply",
     "tool_arguments",
     "tool_results",
     "execution_trace",
@@ -33,10 +56,21 @@ JSON_FIELDS = {
     "slots",
     "missing_fields",
     "called_tools",
+    "skipped_tools",
     "unsupported_tools",
+    "approval_decisions",
+    "tool_errors",
+    "tool_execution_keys",
+    "handoff_reason",
     "tool_arguments",
     "tool_results",
     "execution_trace",
+    "model_runtime",
+    "evidence_ids",
+    "vision_results",
+    "vision_model_runtime",
+    "image_confirmation_decisions",
+    "confirmed_visual_slots",
 }
 
 
@@ -62,12 +96,50 @@ def append_agent_run(
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "execution_mode": execution_mode,
         "status": result.get("status", ""),
+        "request_id": result.get("request_id", ""),
+        "thread_id": result.get("thread_id", ""),
+        "customer_id": result.get("customer_id", ""),
+        "approval_mode": result.get("approval_mode", ""),
         "question": parse_result.get("raw_question", ""),
         "intents": _json_dumps(parse_result.get("intents", [])),
         "slots": _json_dumps(parse_result.get("slots", {})),
+        "parse_source": parse_result.get("parse_source", "rules"),
+        "parse_confidence": parse_result.get("confidence", ""),
+        "model_runtime": _json_dumps(
+            result.get("model_runtime")
+            or parse_result.get("debug", {}).get("model_runtime", {})
+        ),
+        "evidence_ids": _json_dumps(
+            [
+                item.get("evidence_id")
+                for item in result.get("attachments", [])
+                if item.get("evidence_id")
+            ]
+        ),
+        "vision_status": result.get("vision_status", ""),
+        "vision_results": _json_dumps(result.get("vision_results", [])),
+        "vision_model_runtime": _json_dumps(
+            result.get("vision_model_runtime", [])
+        ),
+        "image_confirmation_decisions": _json_dumps(
+            result.get("image_confirmation_decisions", [])
+        ),
+        "confirmed_visual_slots": _json_dumps(
+            result.get("confirmed_visual_slots", {})
+        ),
         "missing_fields": _json_dumps(parse_result.get("missing_fields", [])),
         "called_tools": _json_dumps(result.get("called_tools", [])),
+        "skipped_tools": _json_dumps(result.get("skipped_tools", [])),
         "unsupported_tools": _json_dumps(result.get("unsupported_tools", [])),
+        "approval_decisions": _json_dumps(result.get("approval_decisions", [])),
+        "tool_errors": _json_dumps(result.get("tool_errors", {})),
+        "tool_execution_keys": _json_dumps(result.get("tool_execution_keys", {})),
+        "handoff_id": result.get("handoff_id", ""),
+        "handoff_status": result.get("handoff_status", ""),
+        "handoff_priority": result.get("handoff_priority", ""),
+        "handoff_reason": _json_dumps(result.get("handoff_reason", {})),
+        "assigned_agent": result.get("assigned_agent", ""),
+        "human_reply": result.get("human_reply", ""),
         "tool_arguments": _json_dumps(tool_arguments or result.get("tool_arguments", {})),
         "tool_results": _json_dumps(result.get("tool_results", {})),
         "execution_trace": _json_dumps(result.get("execution_trace", [])),

@@ -3,9 +3,16 @@ __pycache__/
 *.pyc
 .env
 chroma_db/
+data/rag_documents.sqlite3
+data/rag_documents.sqlite3-shm
+data/rag_documents.sqlite3-wal
+data/rag_semantic_cache/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+data/rag_uploads/
 .streamlit/secrets.toml
 reports/
 docs_sample_backup/
-/assets/
 *.log
 /贵州劲龙机械.md

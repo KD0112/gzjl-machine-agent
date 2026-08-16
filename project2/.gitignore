@@ -1,3 +1,9 @@
 logs/*.csv
 logs/*.log
+logs/*.jsonl
+logs/*.sqlite3
+logs/*.sqlite3-shm
+logs/*.sqlite3-wal
+logs/image_evidence/
+tests/fixtures/multimodal_real/sanitized/
 bin/
